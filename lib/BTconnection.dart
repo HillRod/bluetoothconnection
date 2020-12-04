@@ -5,7 +5,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bluetooth_serial/flutter_bluetooth_serial.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'ChatPage.dart';
 
 class BTconnection extends StatefulWidget {
   @override
@@ -32,12 +31,16 @@ class _BTconnectionState extends State<BTconnection> {
 
   final GlobalKey<ScaffoldState> _scaffoldKey = new GlobalKey<ScaffoldState>();
 
-  //List<_Message> messages = List<_Message>();
+  List<_Message> messages = List<_Message>();
   String _messageBuffer = '';
+
+  List<TextEditingController> listaCtrl = List<TextEditingController>();
 
   // This member variable will be used for tracking
   // the Bluetooth device connection state
   int _deviceState;
+
+  int cont = 0;
 
   List<BluetoothDevice> _devicesList = [];
   BluetoothDevice _device;
@@ -49,6 +52,15 @@ class _BTconnectionState extends State<BTconnection> {
   @override
   void initState() {
     super.initState();
+
+    listaCtrl.add(new TextEditingController());
+    listaCtrl.add(new TextEditingController());
+    listaCtrl.add(new TextEditingController());
+    listaCtrl.add(new TextEditingController());
+    listaCtrl.add(new TextEditingController());
+    listaCtrl.add(new TextEditingController());
+    listaCtrl.add(new TextEditingController());
+    listaCtrl.add(new TextEditingController());
 
     // Get current state
     FlutterBluetoothSerial.instance.state.then((state) {
@@ -189,7 +201,7 @@ class _BTconnectionState extends State<BTconnection> {
             _connected = true;
           });
 
-          connection.input.listen(null).onDone(() {
+          connection.input.listen(_onDataReceived).onDone(() {
             if (isDisconnecting) {
               print('Disconnecting locally!');
             } else {
@@ -211,14 +223,68 @@ class _BTconnectionState extends State<BTconnection> {
   }
 
 
-  void _startChat(BuildContext context, BluetoothDevice server) {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (context) {
-          return ChatPage(server: server);
-        },
-      ),
-    );
+  void _onDataReceived(Uint8List data) {
+    // Allocate buffer for parsed data
+    int backspacesCounter = 0;
+    data.forEach((byte) {
+      if (byte == 8 || byte == 127) {
+        backspacesCounter++;
+      }
+    });
+    Uint8List buffer = Uint8List(data.length - backspacesCounter);
+    int bufferIndex = buffer.length;
+
+    // Apply backspace control character
+    backspacesCounter = 0;
+    for (int i = data.length - 1; i >= 0; i--) {
+      if (data[i] == 8 || data[i] == 127) {
+        backspacesCounter++;
+      } else {
+        if (backspacesCounter > 0) {
+          backspacesCounter--;
+        } else {
+          buffer[--bufferIndex] = data[i];
+        }
+      }
+    }
+
+    // Create message if there is new line character
+    String dataString = String.fromCharCodes(buffer);
+    int index = buffer.indexOf(13);
+    if (~index != 0) {
+      setState(() {
+        messages.add(
+          _Message(
+            1,
+            backspacesCounter > 0
+                ? _messageBuffer.substring(
+                    0, _messageBuffer.length - backspacesCounter)
+                : _messageBuffer + dataString.substring(0, index),
+          ),
+        );
+        print(backspacesCounter > 0
+            ? _messageBuffer.substring(
+                0, _messageBuffer.length - backspacesCounter)
+            : _messageBuffer + dataString.substring(0, index));
+        _messageBuffer = dataString.substring(index);
+      });
+    } else {
+      _messageBuffer = (backspacesCounter > 0
+          ? _messageBuffer.substring(
+              0, _messageBuffer.length - backspacesCounter)
+          : _messageBuffer + dataString);
+    }
+
+    if (cont < 8) {
+      for (var i = 0; i < messages.length; i++) {
+        messages.elementAt(i).text =
+            messages.elementAt(i).text.replaceAll('\n', '');
+        listaCtrl.elementAt(i).text = messages.elementAt(i).text;
+      }
+    } else if (cont == 8) {
+      connection.close();
+    }
+    cont++;
   }
 
   //-------------------------end-------------------------------
@@ -345,23 +411,6 @@ class _BTconnectionState extends State<BTconnection> {
             ),
           ],
         ),
-        Row(
-          children: [
-            Expanded(
-                child: RaisedButton(
-              onPressed: () async {
-                if (_device != null) {
-                    print('Connect -> selected ' + _device.address);
-                    _startChat(context, _device);
-                  } else {
-                    print('Connect -> no device selected');
-                  }
-              }, //!_connected ? null : ,
-              child: Text('Tomar Mediciones'),
-              color: Color.fromRGBO(22, 200, 45, 1),
-            ))
-          ],
-        ),
         SizedBox(height: 20),
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -381,11 +430,11 @@ class _BTconnectionState extends State<BTconnection> {
               children: [
                 Expanded(
                     child: TextField(
-                  obscureText: true,
                   decoration: InputDecoration(
                     border: OutlineInputBorder(),
                     labelText: placeholder,
                   ),
+                  controller: listaCtrl.elementAt(0),
                 )),
                 Expanded(child: Text('    cm'))
               ],
@@ -411,11 +460,11 @@ class _BTconnectionState extends State<BTconnection> {
               children: [
                 Expanded(
                     child: TextField(
-                  obscureText: true,
                   decoration: InputDecoration(
                     border: OutlineInputBorder(),
                     labelText: placeholder,
                   ),
+                  controller: listaCtrl.elementAt(1),
                 )),
                 Expanded(child: Text('    cm'))
               ],
@@ -441,11 +490,11 @@ class _BTconnectionState extends State<BTconnection> {
               children: [
                 Expanded(
                     child: TextField(
-                  obscureText: true,
                   decoration: InputDecoration(
                     border: OutlineInputBorder(),
                     labelText: placeholder,
                   ),
+                  controller: listaCtrl.elementAt(2),
                 )),
                 Expanded(child: Text('    cm'))
               ],
@@ -471,11 +520,11 @@ class _BTconnectionState extends State<BTconnection> {
               children: [
                 Expanded(
                     child: TextField(
-                  obscureText: true,
                   decoration: InputDecoration(
                     border: OutlineInputBorder(),
                     labelText: placeholder,
                   ),
+                  controller: listaCtrl.elementAt(3),
                 )),
                 Expanded(child: Text('    cm'))
               ],
@@ -501,11 +550,11 @@ class _BTconnectionState extends State<BTconnection> {
               children: [
                 Expanded(
                     child: TextField(
-                  obscureText: true,
                   decoration: InputDecoration(
                     border: OutlineInputBorder(),
                     labelText: placeholder,
                   ),
+                  controller: listaCtrl.elementAt(4),
                 )),
                 Expanded(child: Text('    cm'))
               ],
@@ -531,11 +580,11 @@ class _BTconnectionState extends State<BTconnection> {
               children: [
                 Expanded(
                     child: TextField(
-                  obscureText: true,
                   decoration: InputDecoration(
                     border: OutlineInputBorder(),
                     labelText: placeholder,
                   ),
+                  controller: listaCtrl.elementAt(5),
                 )),
                 Expanded(child: Text('    cm'))
               ],
@@ -561,11 +610,11 @@ class _BTconnectionState extends State<BTconnection> {
               children: [
                 Expanded(
                     child: TextField(
-                  obscureText: true,
                   decoration: InputDecoration(
                     border: OutlineInputBorder(),
                     labelText: placeholder,
                   ),
+                  controller: listaCtrl.elementAt(6),
                 )),
                 Expanded(child: Text('    cm'))
               ],
@@ -591,11 +640,11 @@ class _BTconnectionState extends State<BTconnection> {
               children: [
                 Expanded(
                     child: TextField(
-                  obscureText: true,
                   decoration: InputDecoration(
                     border: OutlineInputBorder(),
                     labelText: placeholder,
                   ),
+                  controller: listaCtrl.elementAt(7),
                 )),
                 Expanded(child: Text('    cm'))
               ],
@@ -608,3 +657,9 @@ class _BTconnectionState extends State<BTconnection> {
   }
 }
 
+class _Message {
+  int whom;
+  String text;
+
+  _Message(this.whom, this.text);
+}
